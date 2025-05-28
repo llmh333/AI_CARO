@@ -218,16 +218,14 @@ class AI:
             self.approved_table[board_hash] = [max_depth - depth, best_score]
             return best_score
         
-    def find_best_move(self, time_limit : float = 3.0):
+    def find_best_move(self, max_depth):
         move = None
         best_score = -float('inf')
-        # start_time = time.time()
-        # while time.time() - start_time < time_limit:
         for next_move in self.get_all_move_possible():
             self.make_move(next_move, X_TURN)
             score_attack = self.attack_point(next_move, X_TURN)
             score_defend = self.defend_point(next_move, X_TURN)
-            score = self.minimax(0, MAX_DEPTH, X_TURN, False, next_move, -float('inf'), float('inf'))
+            score = self.minimax(0, max_depth, X_TURN, False, next_move, -float('inf'), float('inf'))
             if score < 0:  
                 score_next_move = score_defend
                 type_move = DEFEND_MOVE
@@ -242,9 +240,13 @@ class AI:
                 best_score = score_next_move
                 move = next_move
             elif score_next_move == best_score:
-                if type_move == DEFEND_MOVE:
+                if score_next_move >= 90 and type_move == ATTACK_MOVE:
+                    best_score = score_next_move
+                    move = next_move
+                elif type_move == DEFEND_MOVE:
                     best_score = score_next_move
                     move = next_move    
+                    
         return move
     
 # board = [

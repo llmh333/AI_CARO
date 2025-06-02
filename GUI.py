@@ -16,7 +16,7 @@ class TicTacToe:
         self.current_move = None
         self.score_o = 0
         self.score_x = 0
-        self.max_depth = 2
+        self.max_depth = GAME_MODE_NORMAL
 
     def draw_score_table(self):
         pygame.draw.rect(self.screen, BACKGROUND_COLOR, (WIDTH-200, 0, 200, HEIGHT), 0)
@@ -56,6 +56,15 @@ class TicTacToe:
                     pygame.draw.line(self.screen, X_COLOR, (column*40+5, row*40+5), (column*40+35, row*40+35), 4)
                     pygame.draw.line(self.screen, X_COLOR, (column*40+35, row*40+5), (column*40+5, row*40+35), 4)
 
+    def draw_status_turn(self, typeChess):
+        font = pygame.font.Font("fonts/Arial.ttf", 20)
+        if (typeChess == X_TURN):
+            title = font.render("AI đang suy nghĩ", True, WHITE_COLOR)
+        elif (typeChess == O_TURN):
+            title = font.render("Lượt người chơi", True, WHITE_COLOR)
+        self.screen.blit(title, (610,120))
+        
+        
     def draw_status_game(self, winning_cells):
         if not winning_cells or len(winning_cells) < TOTAL_CHESS:
             return
@@ -153,9 +162,12 @@ class TicTacToe:
                 if event.type == pygame.MOUSEBUTTONDOWN:     
                     position_moves = pygame.mouse.get_pos()             
                     if self.turn == O_TURN:
+                        pygame.event.set_blocked([pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP])
                         move_o = [position_moves[1], position_moves[0]]
                         if (self.make_moves(move_o, O_TURN)):
                             self.current_move = tuple([move_o[0]//40, move_o[1]//40])
+                            self.draw()
+                            pygame.display.flip()
                             self.turn = X_TURN
                             check = self.check_status_game(self.current_move, O_TURN)
                             if check != None:
@@ -176,6 +188,9 @@ class TicTacToe:
                     if check[0] == WIN_GAME:
                         self.score_x += 1
                     self.status_game = check
+        pygame.event.set_allowed([pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP])
+
+
 
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
@@ -185,17 +200,22 @@ class TicTacToe:
         
         if self.current_move != None:
             self.draw_current_move()
-        
+
         if self.status_game:
             self.draw_status_game(self.status_game[2])
             self.draw_button_restart()
 
     def run(self):
         while self.running:
-            self.handle_events()
-            self.ai_move()
             self.draw()
+            if self.turn == O_TURN:
+                self.draw_status_turn(O_TURN)
+                self.handle_events()
             pygame.display.flip()
+            if self.turn == X_TURN:
+                self.draw_status_turn(X_TURN)
+                pygame.display.flip()
+                self.ai_move()
         pygame.quit()
 
 

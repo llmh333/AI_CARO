@@ -71,12 +71,10 @@ if __name__ == "__main__":
                 elif state_menu == "game_mode":          
                     if normal_button.collidepoint(event.pos):
                             game = GUI.TicTacToe()
-                            game.max_depth = 2
+                            game.max_depth = GAME_MODE_NORMAL
                             game.run()
                     elif difficult_button.collidepoint(event.pos):
                             game = GUI.TicTacToe()
-                            game.max_depth = 3
+                            game.max_depth = GAME_MODE_HARD
                             game.run()
         pygame.display.flip()
-    game = GUI.TicTacToe()
-    game.run()

@@ -2,18 +2,22 @@ import time
 from constant import *
 import os
 import numpy as np
+
 class AI:
     def __init__(self, board):
         self.board = board
         self.empty_positions = set()
-        self.approved_table = {}
+        self.transposition_table = {}
         self.center = (BOARD_ROWS // 2, BOARD_COLUMNS // 2)
-        self.direct = [
-            ((-1,0), (1,0)),
-            ((0,-1), (0,1)),
+        self.directions = [
+            ((-1,0), (1,0)),   
+            ((0,-1), (0,1)),   
             ((-1, -1), (1, 1)),
-            ((-1, 1), (1, -1))
+            ((-1, 1), (1, -1)) 
         ]
+        
+        self.move_deltas = [(0,1), (0,-1), (1,0), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]
+        
         for i in range(len(board)):
             for j in range(len(board[i])):
                 if board[i][j] == None:
@@ -36,245 +40,218 @@ class AI:
     def is_board_full(self):
         return len(self.empty_positions) == 0
     
-    def get_all_move_possible(self):
+    def quick_attack_score(self, move, typeChess):
+        max_score = 0
+        for dir1, dir2 in self.directions:
+            count = 1 
+            blocked = 0
+            
+            row, col = move[0] + dir1[0], move[1] + dir1[1]
+            while (0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and self.board[row][col] == typeChess):
+                count += 1
+                row += dir1[0]
+                col += dir1[1]
+            if (0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and self.board[row][col] is not None):
+                blocked += 1
+                
+            row, col = move[0] + dir2[0], move[1] + dir2[1]
+            while (0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and self.board[row][col] == typeChess):
+                count += 1
+                row += dir2[0]
+                col += dir2[1]
+            if (0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and self.board[row][col] is not None):
+                blocked += 1
+
+            if count >= 5:
+                return 10000
+            elif count == 4:
+                score = 1000 if blocked == 0 else (500 if blocked == 1 else 50)
+            elif count == 3:
+                score = 100 if blocked == 0 else (50 if blocked == 1 else 10)
+            elif count == 2:
+                score = 10 if blocked == 0 else (5 if blocked == 1 else 1)
+            else:
+                score = 1
+                
+            max_score = max(max_score, score)
+        return max_score
+    
+    def quick_defend_score(self, move, my_type):
+        enemy_type = O_TURN if my_type == X_TURN else X_TURN
+        return self.quick_attack_score(move, enemy_type)
+    
+    def get_all_move_possible(self, limit=20):
         moves = set()
-        dx = [0, 0, 1, -1, -1, 1, -1, 1]
-        dy = [1, -1, 0, 0, 1, 1, -1, -1]
         for row in range(BOARD_ROWS):
             for col in range(BOARD_COLUMNS):
-                if self.board[row][col] != None:
-                    for k in range(len(dx)):
-                        row_new = row + dx[k]
-                        col_new = col + dy[k]
-                        if 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS:
-                            if self.board[row_new][col_new] == None:
-                                moves.add((row_new, col_new))    
-        moves = list(moves)
-        if not moves and self.empty_positions:
-            moves = list(self.empty_positions)
+                if self.board[row][col] is not None:
+                    for dx, dy in self.move_deltas:
+                        new_row, new_col = row + dx, col + dy
+                        if (0 <= new_row < BOARD_ROWS and 0 <= new_col < BOARD_COLUMNS and self.board[new_row][new_col] is None):
+                            moves.add((new_row, new_col))
         
-        moves.sort(key=lambda m: abs(m[0] - self.center[0]) + abs(m[1] - self.center[1]))
-        return moves
+        moves = list(moves)
+        
+        if not moves and self.empty_positions:
+            center_moves = [(row, col) for row, col in self.empty_positions 
+                           if abs(row - self.center[0]) <= 2 and abs(col - self.center[1]) <= 2]
+            moves = center_moves if center_moves else list(self.empty_positions)
+        
+        move_scores = []
+        for move in moves:
+            attack_score = self.quick_attack_score(move, X_TURN)
+            defend_score = self.quick_defend_score(move, X_TURN)
+            distance_penalty = abs(move[0] - self.center[0]) + abs(move[1] - self.center[1])
+            total_score = attack_score + defend_score - distance_penalty * 0.1
+            move_scores.append((total_score, move))
+        
+        move_scores.sort(reverse=True)
+        return [move for _, move in move_scores[:limit]]
+    
+    
     
     def check_status_game(self, move, typeChess):
-        for direct1, direct2 in self.direct:
+        for direct1, direct2 in self.directions:
             count = 1
-            row = move[0] + direct1[0]
-            col = move[1] + direct1[1]
-            while 0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and self.board[row][col] == typeChess:
+            
+            row, col = move[0] + direct1[0], move[1] + direct1[1]
+            while (0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and 
+                   self.board[row][col] == typeChess):
+                count += 1
                 row += direct1[0]
                 col += direct1[1]
-                count += 1
 
-            row = move[0] + direct2[0]
-            col = move[1] + direct2[1]
-            while 0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and self.board[row][col] == typeChess:
+            row, col = move[0] + direct2[0], move[1] + direct2[1]
+            while (0 <= row < BOARD_ROWS and 0 <= col < BOARD_COLUMNS and 
+                   self.board[row][col] == typeChess):
+                count += 1
                 row += direct2[0]   
                 col += direct2[1]
-                count += 1
+                
             if count >= TOTAL_CHESS:
                 return [WIN_GAME, typeChess]
+                
         if self.is_board_full():
             return [TIE_GAME, typeChess]    
         return None
+    
     def get_board_hash(self):
-        return tuple(tuple(row) for row in self.board)
+        return hash(tuple(tuple(row) for row in self.board))
 
-    def attack_point(self, move, typeChess):
-        best_point = 0
-        for direct1, direct2 in self.direct:
-            count = 0
-            score = 0
-            enemy_chess = 0
-            row_new = move[0]
-            col_new = move[1]
-            while 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS and self.board[row_new][col_new] == typeChess:
-                row_new += direct1[0]
-                col_new += direct1[1]
-                count += 1
-                if 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS:
-                    if self.board[row_new][col_new] != typeChess and self.board[row_new][col_new] != None:
-                        enemy_chess += 1
-            
-            row_new = move[0]
-            col_new = move[1]
-            count -= 1
-            while 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS and self.board[row_new][col_new] == typeChess:
-                row_new += direct2[0]
-                col_new += direct2[1]
-                count += 1  
-                if 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS:
-                    if self.board[row_new][col_new] != typeChess and self.board[row_new][col_new] != None:
-                        enemy_chess += 1    
-            if count == 1:
-                if enemy_chess == 2:
-                    score = 5
-                elif enemy_chess == 1:
-                    score = 10
-                elif enemy_chess == 0:
-                    score = 15
-            elif count == 2:
-                if enemy_chess == 2:
-                    score = 15
-                elif enemy_chess == 1:
-                    score = 20
-                elif enemy_chess == 0:
-                    score = 25
-            elif count == 3:
-                if enemy_chess == 2:
-                    score = 25
-                elif enemy_chess == 1:
-                    score = 30
-                elif enemy_chess == 0:
-                    score = 35
-            elif count == 4:
-                if enemy_chess == 2:
-                    score = 40
-                elif enemy_chess == 1:
-                    score = 90
-                elif enemy_chess == 0:
-                    score = 100
-            best_point = max(best_point, score)
-        return best_point  
-    def defend_point(self, move, typeChess):
-        best_point = 0
-        for direct1, direct2 in self.direct:
-            score = 0
-            enemy_chess = 0 
-            row_new = move[0] + direct1[0]
-            col_new = move[1] + direct1[1]
-            while 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS and self.board[row_new][col_new] != typeChess and self.board[row_new][col_new] != None:
-                row_new += direct1[0]
-                col_new += direct1[1]
-                enemy_chess += 1
-            
-            row_new = move[0] + direct2[0]
-            col_new = move[1] + direct2[1]
-            while 0 <= row_new < BOARD_ROWS and 0 <= col_new < BOARD_COLUMNS and self.board[row_new][col_new] != typeChess and self.board[row_new][col_new] != None:
-                row_new += direct2[0]
-                col_new += direct2[1]
-                enemy_chess += 1    
-            if enemy_chess == 1:
-                score = 5
-            elif enemy_chess == 2:
-                score = 10
-            elif enemy_chess == 3:
-                score = 80
-            elif enemy_chess == 4:
-                score = 100
-            best_point = max(best_point, score)
-        return best_point
+    def evaluate_position(self, last_move, player):
 
+        status = self.check_status_game(last_move, player)
+        if status:
+            if status[0] == WIN_GAME:
+                return 10000 if status[1] == X_TURN else -10000
+            return 0 
+        
+        my_score = self.position_score(X_TURN)
+        enemy_score = self.position_score(O_TURN)
+        return my_score - enemy_score
+    
+    def position_score(self, player):
+        total_score = 0
+        for row in range(BOARD_ROWS):
+            for col in range(BOARD_COLUMNS):
+                if self.board[row][col] == player:
+                    total_score += self.quick_attack_score((row, col), player)
+        return total_score
 
-    def minimax(self, depth, max_depth, typeChess, is_maximizing, move, alpha : float = -float('inf'), beta : float = float('inf')):
-
-        status_game = self.check_status_game(move, typeChess)
-        if status_game is not None:
-            if status_game[0] == TIE_GAME:
-                return 0
-            if status_game[0] == WIN_GAME and status_game[1] == O_TURN:
-                return -100+depth
-            elif status_game[0] == WIN_GAME and status_game[1] == X_TURN:
-                return 100-depth
+    def minimax(self, depth, max_depth, typeChess, is_maximizing, last_move, alpha=float('-inf'), beta=float('inf')):
+        
+        if last_move:
+            evaluation = self.evaluate_position(last_move, typeChess)
+            if abs(evaluation) >= 10000:  # Game over
+                return evaluation + (depth if evaluation < 0 else -depth)
+        
         if depth >= max_depth:
-            score_attack = self.attack_point(move, typeChess)
-            score_defend = self.defend_point(move, typeChess)
-            if typeChess == X_TURN:
-                return max(score_attack-depth, score_defend-depth)
-            else:
-                return min(-score_attack+depth, -score_defend+depth)
+            return self.evaluate_position(last_move, typeChess) if last_move else 0
+        
         board_hash = self.get_board_hash()
-        if board_hash in self.approved_table:
-            stored_depth, stored_score = self.approved_table[board_hash]
-            if stored_depth <= max_depth - depth:
-                return stored_score
+        if board_hash in self.transposition_table:
+            stored_depth, stored_score, stored_type = self.transposition_table[board_hash]
+            if stored_depth >= max_depth - depth:
+                if stored_type == 'exact':
+                    return stored_score
+                elif stored_type == 'alpha' and stored_score <= alpha:
+                    return stored_score
+                elif stored_type == 'beta' and stored_score >= beta:
+                    return stored_score
 
-        move_possible = self.get_all_move_possible()
+        moves = self.get_all_move_possible(limit=15)
+        
         if is_maximizing:
-            best_score = -float('inf')
-            for next_move in move_possible:
-                self.make_move(next_move, X_TURN)
-                score = self.minimax(depth+1, max_depth, X_TURN, False, next_move, alpha, beta)
-                self.undo_move(next_move)
+            best_score = float('-inf')
+            hash_type = 'alpha'
+            
+            for move in moves:
+                self.make_move(move, X_TURN)
+                score = self.minimax(depth + 1, max_depth, X_TURN, False, move, alpha, beta)
+                self.undo_move(move)
 
-                best_score = max(score, best_score)
+                if score > best_score:
+                    best_score = score
+                    
                 alpha = max(alpha, best_score)
                 if beta <= alpha:
+                    hash_type = 'beta'
                     break
-            
-            self.approved_table[board_hash] = [max_depth - depth, best_score]
-            return best_score
+                    
         else:
-            best_score = float('inf')   
-            for next_move in move_possible:
-                self.make_move(next_move, O_TURN)
-                score = self.minimax(depth+1, max_depth, O_TURN, True, next_move, alpha, beta)
-                self.undo_move(next_move)
-                best_score = min(score, best_score)
+            best_score = float('inf')
+            hash_type = 'alpha'
+            
+            for move in moves:
+                self.make_move(move, O_TURN)
+                score = self.minimax(depth + 1, max_depth, O_TURN, True, move, alpha, beta)
+                self.undo_move(move)
 
+                if score < best_score:
+                    best_score = score
+                    
                 beta = min(beta, best_score)
                 if beta <= alpha:
+                    hash_type = 'beta'
                     break
-            self.approved_table[board_hash] = [max_depth - depth, best_score]
-            return best_score
+        
+        if abs(best_score) < 9000: 
+            self.transposition_table[board_hash] = (max_depth - depth, best_score, hash_type)
+        
+        return best_score
         
     def find_best_move(self, max_depth):
-        move = None
-        best_score = -float('inf')
-        for next_move in self.get_all_move_possible():
-            self.make_move(next_move, X_TURN)
-            score_attack = self.attack_point(next_move, X_TURN)
-            score_defend = self.defend_point(next_move, X_TURN)
-            score = self.minimax(0, max_depth, X_TURN, False, next_move, -float('inf'), float('inf'))
-            if score < 0:  
-                score_next_move = score_defend
-                type_move = DEFEND_MOVE
-            else:   
-                score_next_move = score
-                if score_attack > score_defend:
-                    type_move = ATTACK_MOVE
-                else:
-                    type_move = DEFEND_MOVE
-            self.undo_move(next_move)
-            if score_next_move > best_score:
-                best_score = score_next_move
-                move = next_move
-            elif score_next_move == best_score:
-                if score_next_move >= 90 and type_move == ATTACK_MOVE:
-                    best_score = score_next_move
-                    move = next_move
-                elif type_move == DEFEND_MOVE:
-                    best_score = score_next_move
-                    move = next_move    
-                    
-        return move
-    
-# board = [
-#     [None, None, None, None, 'X', None, None, None, None, None],
-#     [None, None, None, None, 'O', None, None, None, None, None],
-#     [None, None, None, None, 'O', None, None, None, None, None],
-#     [None, None, None,  'O', 'O', 'O', None, 'O', None, None],
-#     [None, None, 'X',   'O', 'O', 'O', 'X', None, None, None],
-#     [None, None, None, None, 'X', 'X', 'X', None, None, None],
-#     [None, None, None, None, None, 'X', None, None, None, None],
-#     [None, None, None, None, None, 'X', None, None, None, None],
-#     [None, None, None, None, None, 'X', None, None, None, None],
-#     [None, None, None, None, None, 'O', None, None, None, None]]
-# turn = X_TURN
-# while True:
-#     if turn == O_TURN:
-#         for x in board:
-#             print(x)
-#         print("---Turn O---")
-#         row = int(input("row = "))
-#         col = int(input("col = "))
-#         os.system("cls")
-#         board[row][col] = O_TURN
-#         turn = X_TURN
-#     elif turn == X_TURN:
-#         ai = AI(board)
-#         move = ai.find_best_move()
-#         print(move)
-#         if (move != None):
-#             board[move[0]][move[1]] = X_TURN
-#             turn = O_TURN
+        start_time = time.time()
+        total_time = None
+        best_move = None
+        
+        for current_depth in range(2, max_depth + 1):
+            if time.time() - start_time > 5.0:
+                total_time = time.time() - start_time
+                break
+             
+            temp_best_move = None
+            best_score = float('-inf')
+            
+            moves = self.get_all_move_possible(limit=15)
+            
+            for move in moves:
+                self.make_move(move, X_TURN)
+                
+                if self.check_status_game(move, X_TURN):
+                    self.undo_move(move)
+                    return move
+                
+                score = self.minimax(1, current_depth, X_TURN, False, move)
+                self.undo_move(move)
+                
+                if score > best_score:
+                    best_score = score
+                    temp_best_move = move
+            
+            if temp_best_move:
+                best_move = temp_best_move
+        if total_time == None:
+            total_time = time.time() - start_time   
+        print(total_time)
+        return best_move

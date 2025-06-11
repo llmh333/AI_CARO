@@ -146,7 +146,7 @@ class TicTacToe:
         self.board = [[None for _ in range(BOARD_COLUMNS)] for _ in range(BOARD_ROWS)]
         self.status_game = []
         self.turn = O_TURN
-        self.current_move = None
+        self.current_move = None        
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -162,7 +162,6 @@ class TicTacToe:
                 if event.type == pygame.MOUSEBUTTONDOWN:     
                     position_moves = pygame.mouse.get_pos()             
                     if self.turn == O_TURN:
-                        pygame.event.set_blocked([pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP])
                         move_o = [position_moves[1], position_moves[0]]
                         if (self.make_moves(move_o, O_TURN)):
                             self.current_move = tuple([move_o[0]//40, move_o[1]//40])
@@ -176,6 +175,9 @@ class TicTacToe:
                                 self.status_game = check
 
     def ai_move(self):
+        pygame.event.set_blocked(pygame.MOUSEMOTION)
+        pygame.event.set_blocked(pygame.MOUSEBUTTONDOWN)
+        pygame.event.set_blocked(pygame.MOUSEBUTTONUP)
         if self.turn == X_TURN and not self.status_game:
             ai = AI(board=self.board)
             move_ai = ai.find_best_move(self.max_depth)
@@ -189,6 +191,7 @@ class TicTacToe:
                         self.score_x += 1
                     self.status_game = check
         pygame.event.set_allowed([pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP])
+
 
 
 
@@ -217,9 +220,3 @@ class TicTacToe:
                 pygame.display.flip()
                 self.ai_move()
         pygame.quit()
-
-
-# Create and run the game
-# if __name__ == "__main__":
-#     game = TicTacToe()
-#     game.run()

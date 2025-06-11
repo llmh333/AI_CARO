@@ -158,16 +158,13 @@ class AI:
                     total_score += self.quick_attack_score((row, col), player)
         return total_score
 
-    def minimax(self, depth, max_depth, typeChess, is_maximizing, last_move, alpha=float('-inf'), beta=float('inf')):
-        
+    def minimax(self, depth, max_depth, typeChess, is_maximizing, last_move, alpha=float('-inf'), beta=float('inf')): 
         if last_move:
             evaluation = self.evaluate_position(last_move, typeChess)
             if abs(evaluation) >= 10000:  # Game over
                 return evaluation + (depth if evaluation < 0 else -depth)
-        
         if depth >= max_depth:
             return self.evaluate_position(last_move, typeChess) if last_move else 0
-        
         board_hash = self.get_board_hash()
         if board_hash in self.transposition_table:
             stored_depth, stored_score, stored_type = self.transposition_table[board_hash]
@@ -178,46 +175,35 @@ class AI:
                     return stored_score
                 elif stored_type == 'beta' and stored_score >= beta:
                     return stored_score
-
         moves = self.get_all_move_possible(limit=15)
-        
         if is_maximizing:
             best_score = float('-inf')
             hash_type = 'alpha'
-            
             for move in moves:
                 self.make_move(move, X_TURN)
                 score = self.minimax(depth + 1, max_depth, X_TURN, False, move, alpha, beta)
                 self.undo_move(move)
-
                 if score > best_score:
-                    best_score = score
-                    
+                    best_score = score    
                 alpha = max(alpha, best_score)
                 if beta <= alpha:
                     hash_type = 'beta'
-                    break
-                    
+                    break                  
         else:
             best_score = float('inf')
-            hash_type = 'alpha'
-            
+            hash_type = 'alpha'  
             for move in moves:
                 self.make_move(move, O_TURN)
                 score = self.minimax(depth + 1, max_depth, O_TURN, True, move, alpha, beta)
                 self.undo_move(move)
-
                 if score < best_score:
-                    best_score = score
-                    
+                    best_score = score             
                 beta = min(beta, best_score)
                 if beta <= alpha:
                     hash_type = 'beta'
-                    break
-        
+                    break 
         if abs(best_score) < 9000: 
-            self.transposition_table[board_hash] = (max_depth - depth, best_score, hash_type)
-        
+            self.transposition_table[board_hash] = (max_depth - depth, best_score, hash_type)   
         return best_score
         
     def find_best_move(self, max_depth):
@@ -253,5 +239,4 @@ class AI:
                 best_move = temp_best_move
         if total_time == None:
             total_time = time.time() - start_time   
-        print(total_time)
         return best_move
